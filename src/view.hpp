@@ -152,7 +152,10 @@ namespace ppstep {
         }
 
         void current_state() {
-            print_token_container(std::cout, cl.last_history()) << std::endl;
+            auto latest = cl.newest_history();
+            if (latest == cl.oldest_history())
+                return;
+            print_token_container(std::cout, *latest) << std::endl;
         }
 
         template <class ContextT, typename Iterator>
@@ -215,13 +218,13 @@ namespace ppstep {
         }
 
         template <class ContextT>
-        void prompt(ContextT& ctx) {
+        void prompt(ContextT& ctx, bool print_state = true) {
             if (steps_requested > 0) --steps_requested;
             if (steps_requested) return;
 
             cl.set_mode(stepping_mode::FREE);
 
-            current_state();
+            if (print_state) current_state();
 
             auto prompt = std::string("pp");
             if (!prefix.empty()) {

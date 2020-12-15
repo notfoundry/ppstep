@@ -118,11 +118,12 @@ int main(int argc, char const** argv) {
     auto first = ctx.begin();
     auto last = ctx.end();
     try {
+        hooks.start(ctx);
         while (first != last) {
             hooks.lexed_token(ctx, *first);
             ++first;
         }
-        hooks.complete();
+        hooks.complete(ctx);
     } catch (ppstep::session_terminate const& e) {
         ;
     } catch (boost::wave::cpp_exception const& e) {

@@ -25,7 +25,7 @@ namespace ppstep {
         template <class ContextT>
         void on_lexed(ContextT& ctx, TokenT const& token) {
             if (token_stack.empty()) {
-                auto last_tokens = token_history.empty() ? ContainerT() : last_history();
+                auto last_tokens = token_history.empty() ? ContainerT() : *newest_history();
                 last_tokens.push_back(token);
 
                 lexed_tokens.push_back(token);
@@ -34,7 +34,7 @@ namespace ppstep {
                 handle_prompt(ctx, token, break_condition::LEXED);
 
             } else {
-                auto const& last_tokens = last_history();
+                auto const& last_tokens = *newest_history();
 
                 lex_buffer.push_back(token);
                 if (std::equal(std::next(std::begin(last_tokens), lexed_tokens.size()), std::end(last_tokens),
@@ -89,8 +89,16 @@ namespace ppstep {
             handle_prompt(ctx, *(initial.begin()), break_condition::RESCANNED);
         }
 
-        void on_complete() {
-            std::cout << "Expansion complete." << std::endl;
+        template <class ContextT>
+        void on_complete(ContextT& ctx) {
+            std::cout << "Preprocessing complete." << std::endl;
+            cli.prompt(ctx, false);
+        }
+        
+        template <class ContextT>
+        void on_start(ContextT& ctx) {
+            std::cout << "Preprocessing " << ctx.get_main_pos() << '.' << std::endl;
+            cli.prompt(ctx, false);
         }
 
         void add_breakpoint(typename TokenT::string_type const& macro, break_condition cond) {
@@ -123,8 +131,12 @@ namespace ppstep {
             mode = m;
         }
 
-        ContainerT const& last_history() {
-            return *(token_history.rbegin());
+        auto newest_history() {
+            return token_history.rbegin();
+        }
+        
+        auto oldest_history() {
+            return token_history.rend();
         }
 
     private:

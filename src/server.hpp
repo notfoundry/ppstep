@@ -93,9 +93,15 @@ namespace ppstep {
 
             sink->on_lexed(ctx, result);
         }
+        
+        template <typename ContextT>
+        void start(ContextT& ctx) {
+            sink->on_start(ctx);
+        }
 
-        void complete() {
-            sink->on_complete();
+        template <typename ContextT>
+        void complete(ContextT& ctx) {
+            sink->on_complete(ctx);
         }
 
         ppstep::client<TokenT, ContainerT>* sink;
