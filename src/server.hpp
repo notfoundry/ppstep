@@ -4,6 +4,7 @@
 #include <stack>
 #include <vector>
 
+#include "server_fwd.hpp"
 #include "client.hpp"
 
 namespace ppstep {
@@ -11,7 +12,7 @@ namespace ppstep {
     struct server : boost::wave::context_policies::eat_whitespace<TokenT> {
         using base_type = boost::wave::context_policies::eat_whitespace<TokenT>;
 
-        server(ppstep::client<TokenT, ContainerT>& sink) : sink(sink), expanding(), rescanning()  {}
+        server(ppstep::client<TokenT, ContainerT>& sink) : sink(&sink), expanding(), rescanning()  {}
 
         ~server() {}
 
@@ -51,7 +52,7 @@ namespace ppstep {
                 full_call = sanitize(full_call);
             }
 
-            sink.on_expand_function(macrodef, sanitized_arguments, full_call);
+            sink->on_expand_function(ctx, macrodef, sanitized_arguments, full_call);
 
             expanding.push(full_call);
 
@@ -60,18 +61,18 @@ namespace ppstep {
 
         template <typename ContextT>
         bool expanding_object_like_macro(
-                ContextT const& ctx, TokenT const& macrodef,
+                ContextT& ctx, TokenT const& macrodef,
                 ContainerT const& definition, TokenT const& macrocall) {
-            sink.on_expand_object(macrocall);
+            sink->on_expand_object(ctx, macrocall);
 
             expanding.push({macrocall});
             return false;
         }
 
         template <typename ContextT>
-        void expanded_macro(ContextT const& ctx, ContainerT const& result) {
+        void expanded_macro(ContextT& ctx, ContainerT const& result) {
             auto const& initial = expanding.top();
-            sink.on_expanded(sanitize(initial), sanitize(result));
+            sink->on_expanded(ctx, sanitize(initial), sanitize(result));
 
             rescanning.push({initial, result});
 
@@ -79,25 +80,25 @@ namespace ppstep {
         }
 
         template <typename ContextT>
-        void rescanned_macro(ContextT const& ctx, ContainerT const& result) {
+        void rescanned_macro(ContextT& ctx, ContainerT const& result) {
             auto const& [cause, initial] = rescanning.top();
-            sink.on_rescanned(sanitize(cause), sanitize(initial), sanitize(result));
+            sink->on_rescanned(ctx, sanitize(cause), sanitize(initial), sanitize(result));
 
             rescanning.pop();
         }
 
         template <typename ContextT>
-        void lexed_token(ContextT const& ctx, TokenT const& result) {
+        void lexed_token(ContextT& ctx, TokenT const& result) {
             if (should_skip_token(result)) return;
 
-            sink.on_lexed(result);
+            sink->on_lexed(ctx, result);
         }
 
         void complete() {
-            sink.on_complete();
+            sink->on_complete();
         }
 
-        ppstep::client<TokenT, ContainerT>& sink;
+        ppstep::client<TokenT, ContainerT>* sink;
         std::stack<ContainerT> expanding;
         std::stack<std::pair<ContainerT, ContainerT>> rescanning;
     };

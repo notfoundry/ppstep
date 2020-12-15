@@ -10,6 +10,7 @@
 #include <set>
 #include <functional>
 
+#include "server_fwd.hpp"
 #include "client_fwd.hpp"
 #include "view.hpp"
 #include "utils.hpp"
@@ -17,9 +18,12 @@
 namespace ppstep {
     template <class TokenT, class ContainerT>
     struct client {
-        client() : cli(client_cli<TokenT, ContainerT>(*this)), mode(stepping_mode::FREE) {}
+        client(std::string prefix) : cli(client_cli<TokenT, ContainerT>(*this, std::move(prefix))), mode(stepping_mode::FREE) {}
+        
+        client() : client("") {}
 
-        void on_lexed(TokenT const& token) {
+        template <class ContextT>
+        void on_lexed(ContextT& ctx, TokenT const& token) {
             if (token_stack.empty()) {
                 auto last_tokens = token_history.empty() ? ContainerT() : last_history();
                 last_tokens.push_back(token);
@@ -27,7 +31,7 @@ namespace ppstep {
                 lexed_tokens.push_back(token);
                 token_history.push_back(last_tokens);
 
-                handle_prompt(token, break_condition::LEXED);
+                handle_prompt(ctx, token, break_condition::LEXED);
 
             } else {
                 auto const& last_tokens = last_history();
@@ -43,33 +47,37 @@ namespace ppstep {
             }
         }
 
-        void on_expand_function(TokenT const& call, std::vector<ContainerT> const& arguments, ContainerT call_tokens) {
+        template <class ContextT>
+        void on_expand_function(ContextT& ctx, TokenT const& call, std::vector<ContainerT> const& arguments, ContainerT call_tokens) {
             if (token_stack.empty()) {
                 push(std::move(call_tokens));
             }
 
-            handle_prompt(call, break_condition::CALL);
+            handle_prompt(ctx, call, break_condition::CALL);
         }
 
-        void on_expand_object(TokenT const& call) {
+        template <class ContextT>
+        void on_expand_object(ContextT& ctx, TokenT const& call) {
             if (token_stack.empty()) {
                 push({call});
             }
 
-            handle_prompt(call, break_condition::CALL);
+            handle_prompt(ctx, call, break_condition::CALL);
         }
 
-        void on_expanded(ContainerT const& initial, ContainerT const& result) {
+        template <class ContextT>
+        void on_expanded(ContextT& ctx, ContainerT const& initial, ContainerT const& result) {
             auto const& [tokens, start, end] = match(initial);
 
             auto&& [new_tokens, new_start] = splice_between(*tokens, result, start, end);
 
             push(std::move(new_tokens), std::move(new_start));
 
-            handle_prompt(*(initial.begin()), break_condition::EXPANDED);
+            handle_prompt(ctx, *(initial.begin()), break_condition::EXPANDED);
         }
 
-        void on_rescanned(ContainerT const& cause, ContainerT const& initial, ContainerT const& result) {
+        template <class ContextT>
+        void on_rescanned(ContextT& ctx, ContainerT const& cause, ContainerT const& initial, ContainerT const& result) {
             if (initial.empty()) return;
 
             auto const& [tokens, start, end] = match(initial);
@@ -78,7 +86,7 @@ namespace ppstep {
 
             push(std::move(new_tokens), std::move(new_start));
 
-            handle_prompt(*(initial.begin()), break_condition::RESCANNED);
+            handle_prompt(ctx, *(initial.begin()), break_condition::RESCANNED);
         }
 
         void on_complete() {
@@ -167,29 +175,36 @@ namespace ppstep {
             while (!token_stack.empty()) token_stack.pop();
         }
 
-        void handle_prompt(TokenT const& token, break_condition type) {
+        template <class ContextT>
+        void handle_prompt(ContextT& ctx, TokenT const& token, break_condition type) {
+            bool do_prompt = false;
+
             switch (mode) {
                 case stepping_mode::FREE: {
-                    cli.prompt();
+                    do_prompt = true;
                     break;
                 }
                 case stepping_mode::UNTIL_BREAK: {
                     switch (type) {
                         case break_condition::CALL: {
                             if (expansion_breakpoints.find(token.get_value()) != expansion_breakpoints.end()) {
-                                cli.prompt();
+                                do_prompt = true;
                             }
                             break;
                         }
                         case break_condition::EXPANDED: {
                             if (expanded_breakpoints.find(token.get_value()) != expanded_breakpoints.end()) {
-                                cli.prompt();
+                                do_prompt = true;
                             }
                             break;
                         }
                     }
                     break;
                 }
+            }
+
+            if (do_prompt) {
+                cli.prompt(ctx);
             }
         }
 
