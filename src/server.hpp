@@ -12,7 +12,7 @@ namespace ppstep {
     struct server : boost::wave::context_policies::eat_whitespace<TokenT> {
         using base_type = boost::wave::context_policies::eat_whitespace<TokenT>;
 
-        server(ppstep::client<TokenT, ContainerT>& sink) : sink(&sink), expanding(), rescanning()  {}
+        server(ppstep::client<TokenT, ContainerT>& sink) : sink(&sink), expanding(), rescanning(), conditional_nesting(0), evaluating_conditional(false)  {}
 
         ~server() {}
 
@@ -39,6 +39,7 @@ namespace ppstep {
                 ContainerT const& definition,
                 TokenT const& macrocall, std::vector<ContainerT> const& arguments,
                 IteratorT const& seqstart, IteratorT const& seqend) {
+            if (evaluating_conditional) return false;
 
             auto sanitized_arguments = std::vector<ContainerT>();
             for (auto const& arg_container : arguments) {
@@ -63,6 +64,8 @@ namespace ppstep {
         bool expanding_object_like_macro(
                 ContextT& ctx, TokenT const& macrodef,
                 ContainerT const& definition, TokenT const& macrocall) {
+            if (evaluating_conditional) return false;
+            
             sink->on_expand_object(ctx, macrocall);
 
             expanding.push({macrocall});
@@ -71,6 +74,8 @@ namespace ppstep {
 
         template <typename ContextT>
         void expanded_macro(ContextT& ctx, ContainerT const& result) {
+            if (evaluating_conditional) return;
+
             auto const& initial = expanding.top();
             sink->on_expanded(ctx, sanitize(initial), sanitize(result));
 
@@ -81,10 +86,49 @@ namespace ppstep {
 
         template <typename ContextT>
         void rescanned_macro(ContextT& ctx, ContainerT const& result) {
+            if (evaluating_conditional) return;
+
             auto const& [cause, initial] = rescanning.top();
             sink->on_rescanned(ctx, sanitize(cause), sanitize(initial), sanitize(result));
 
             rescanning.pop();
+        }
+        
+        template <typename ContextT>
+        bool found_directive(ContextT const& ctx, TokenT const& directive) {
+            auto directive_id = boost::wave::token_id(directive);
+            switch (directive_id) {
+                case boost::wave::T_PP_IF:
+                case boost::wave::T_PP_ELIF:
+                case boost::wave::T_PP_IFDEF:
+                case boost::wave::T_PP_IFNDEF: {
+                    ++conditional_nesting;
+                    evaluating_conditional = true;
+                    break;
+                }
+                default:
+                    break;
+            }
+            return false;
+        }
+        
+        template <typename ContextT>
+        bool evaluated_conditional_expression(ContextT const& ctx, TokenT const& directive, ContainerT const& expression, bool expression_value) {
+            --conditional_nesting;
+            evaluating_conditional = false;
+
+            return false;
+        }
+        
+        template <typename ContextT, typename ParametersT, typename DefinitionT>
+        void defined_macro(ContextT const& ctx, TokenT const& macro_name, bool is_functionlike, ParametersT const& parameters,
+                           DefinitionT const& definition, bool is_predefined) {
+            
+        }
+        
+        template <typename ContextT>
+        void undefined_macro(ContextT const& ctx, TokenT const& macro_name) {
+            
         }
 
         template <typename ContextT>
@@ -107,6 +151,8 @@ namespace ppstep {
         ppstep::client<TokenT, ContainerT>* sink;
         std::stack<ContainerT> expanding;
         std::stack<std::pair<ContainerT, ContainerT>> rescanning;
+        unsigned int conditional_nesting;
+        bool evaluating_conditional;
     };
 }
 

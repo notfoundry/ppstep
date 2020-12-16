@@ -5,6 +5,7 @@
 #include <stack>
 #include <tuple>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <algorithm>
 #include <set>
@@ -168,7 +169,10 @@ namespace ppstep {
                     token_stack.pop();
                 }
             }
-            throw std::logic_error("could not find pattern in token stack");
+            
+            std::stringstream ss;
+            print_token_container(ss, pattern);
+            throw std::logic_error("could not find pattern \"" + ss.str() + "\" in token stack");
         }
 
         std::pair<ContainerT, container_iterator> splice_between(ContainerT const& tokens, ContainerT const& result, container_iterator start, container_iterator end) {

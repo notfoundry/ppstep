@@ -100,6 +100,7 @@ int main(int argc, char const** argv) {
     if (args.count("include")) {
         for (auto const& path : args["include"].as<std::vector<std::string>>()) {
             ctx.add_include_path(path.c_str());
+            ctx.add_sysinclude_path(path.c_str());
         }
     }
     
