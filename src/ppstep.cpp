@@ -51,6 +51,7 @@ bool parse_args(int argc, char const** argv, po::variables_map& vm) {
                 "specify a macro to define (as macro[=[value]])")
         ("undefine,U", po::value<std::vector<std::string> >()->composing(),
             "specify a macro to undefine")
+        ("debug", "enable debug tracing")
         ("input-file", po::value<std::string>()->required(), "input file");
 
     po::positional_options_description p;
@@ -82,7 +83,7 @@ int main(int argc, char const** argv) {
     auto instring = read_entire_file(std::ifstream(input_file));
 
     auto client = ppstep::client<token_type, token_sequence_type>();
-    auto hooks = ppstep::server<token_type, token_sequence_type>(client);
+    auto hooks = ppstep::server<token_type, token_sequence_type>(client,  args.count("debug"));
     context_type ctx(instring.begin(), instring.end(), input_file, hooks);
 
     static_assert(std::is_same_v<token_sequence_type, typename context_type::token_sequence_type>,

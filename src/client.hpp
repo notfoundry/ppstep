@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <stack>
+#include <optional>
 #include <tuple>
 #include <iostream>
 #include <sstream>
@@ -17,6 +18,25 @@
 #include "utils.hpp"
 
 namespace ppstep {
+    
+    template <class ContainerT>
+    struct offset_container {
+        using iterator = typename ContainerT::const_iterator;
+        
+        offset_container(ContainerT&& tokens, iterator&& start) : tokens(std::move(tokens)), start(std::move(start)) {}
+        
+        offset_container(ContainerT&& tokens) : tokens(std::move(tokens)), start(this->tokens.end()) {}
+        
+        offset_container(offset_container<ContainerT> const&) = delete;
+        
+        std::optional<std::pair<iterator, iterator>> find_pattern(ContainerT const& pattern) const {
+            return find_sublist(tokens, pattern, start);
+        }
+        
+        ContainerT tokens;
+        iterator start;
+    };
+    
     template <class TokenT, class ContainerT>
     struct client {
         client(std::string prefix) : cli(client_cli<TokenT, ContainerT>(*this, std::move(prefix))), mode(stepping_mode::FREE) {}
@@ -68,11 +88,17 @@ namespace ppstep {
 
         template <class ContextT>
         void on_expanded(ContextT& ctx, ContainerT const& initial, ContainerT const& result) {
-            auto const& [tokens, start, end] = match(initial);
+            try {
+                auto const& [tokens, start, end] = match(initial);
 
-            auto&& [new_tokens, new_start] = splice_between(*tokens, result, start, end);
+                ContainerT new_tokens;
+                typename ContainerT::const_iterator new_start;
+                splice_between(*tokens, result, start, end, new_tokens, new_start);
 
-            push(std::move(new_tokens), std::move(new_start));
+                push(std::move(new_tokens), std::move(new_start));
+            } catch (std::logic_error const&) {
+                push(ContainerT(result));
+            }
 
             handle_prompt(ctx, *(initial.begin()), break_condition::EXPANDED);
         }
@@ -81,11 +107,17 @@ namespace ppstep {
         void on_rescanned(ContextT& ctx, ContainerT const& cause, ContainerT const& initial, ContainerT const& result) {
             if (initial.empty()) return;
 
-            auto const& [tokens, start, end] = match(initial);
+            try {
+                auto const& [tokens, start, end] = match(initial);
 
-            auto&& [new_tokens, new_start] = splice_between(*tokens, result, start, end);
-
-            push(std::move(new_tokens), std::move(new_start));
+                ContainerT new_tokens;
+                typename ContainerT::const_iterator new_start;
+                splice_between(*tokens, result, start, end, new_tokens, new_start);
+                
+                push(std::move(new_tokens), std::move(new_start));
+            } catch (std::logic_error const&) {
+                push(ContainerT(result));
+            }
 
             handle_prompt(ctx, *(initial.begin()), break_condition::RESCANNED);
         }
@@ -142,6 +174,8 @@ namespace ppstep {
 
     private:
         using container_iterator = typename ContainerT::const_iterator;
+        
+        using range_container = std::tuple<ContainerT const*, container_iterator, container_iterator>;
 
         void push(ContainerT&& tokens) {
             push(std::move(tokens), std::begin(tokens));
@@ -152,19 +186,23 @@ namespace ppstep {
             historical_tokens.insert(std::end(historical_tokens), std::begin(tokens), std::end(tokens));
             token_history.push_back(historical_tokens);
 
-            token_stack.emplace(std::move(tokens), std::move(head));
+            if (head != tokens.end()) {
+                token_stack.emplace(std::move(tokens), std::move(head));
+            } else {
+                token_stack.emplace(std::move(tokens));
+            }
         }
 
-        std::tuple<ContainerT const*, container_iterator, container_iterator> match(ContainerT const& pattern) {
+        range_container match(ContainerT const& pattern) {
             while (!token_stack.empty()) {
-                auto const& [tokens, head] = token_stack.top();
+                auto& top = token_stack.top();
 
-                auto sublist = find_sublist(tokens, pattern, head);
+                auto sublist = top.find_pattern(pattern);
 
                 if (sublist) {
                     auto [start, end] = *sublist;
 
-                    return std::make_tuple(&tokens, start, end);
+                    return std::make_tuple(&(top.tokens), start, end);
                 } else {
                     token_stack.pop();
                 }
@@ -175,16 +213,16 @@ namespace ppstep {
             throw std::logic_error("could not find pattern \"" + ss.str() + "\" in token stack");
         }
 
-        std::pair<ContainerT, container_iterator> splice_between(ContainerT const& tokens, ContainerT const& result, container_iterator start, container_iterator end) {
-            auto new_tokens = ContainerT();
-
+        void splice_between(ContainerT const& tokens, ContainerT const& result, container_iterator start, container_iterator end,
+                                                       ContainerT& new_tokens, container_iterator& new_start) {
             new_tokens.insert(new_tokens.end(), tokens.begin(), start);
             auto index = new_tokens.size();
 
             new_tokens.insert(new_tokens.end(), result.begin(), result.end());
             new_tokens.insert(new_tokens.end(), end, tokens.end());
-
-            return std::pair<ContainerT, container_iterator>(std::move(new_tokens), std::next(new_tokens.begin(), index));
+            
+            new_start = new_tokens.begin();
+            std::advance(new_start, index);
         }
 
         void reset_token_stack() {
@@ -229,7 +267,7 @@ namespace ppstep {
         std::set<typename TokenT::string_type> expanded_breakpoints;
         stepping_mode mode;
 
-        std::stack<std::pair<ContainerT, container_iterator>> token_stack;
+        std::stack<offset_container<ContainerT>> token_stack;
         std::vector<ContainerT> token_history;
         std::vector<TokenT> lexed_tokens;
         std::vector<TokenT> lex_buffer;
