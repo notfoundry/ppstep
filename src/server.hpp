@@ -167,6 +167,12 @@ namespace ppstep {
             }
         }
         
+        template <typename ContextT, typename ExceptionT>
+        void throw_exception(ContextT& ctx, ExceptionT const& e) {
+            sink->on_exception(ctx, e);
+            boost::throw_exception(e);
+        }
+
         template <typename ContextT>
         void start(ContextT& ctx) {
             if (debug) return;

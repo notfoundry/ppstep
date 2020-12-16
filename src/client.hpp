@@ -122,11 +122,17 @@ namespace ppstep {
 
             handle_prompt(ctx, *(initial.begin()), break_condition::RESCANNED);
         }
+        
+        template <typename ContextT, typename ExceptionT>
+        void on_exception(ContextT& ctx, ExceptionT const& e) {
+            std::cout << e.what() << ": " << e.description() << std::endl;
+            cli.prompt(ctx);
+        }
 
         template <class ContextT>
         void on_complete(ContextT& ctx) {
             std::cout << "Preprocessing complete." << std::endl;
-            cli.prompt(ctx, false);
+            cli.prompt(ctx);
         }
         
         template <class ContextT>
@@ -196,7 +202,7 @@ namespace ppstep {
 
         range_container match(ContainerT const& pattern) {
             while (!token_stack.empty()) {
-                auto& top = token_stack.back();
+                auto const& top = token_stack.back();
 
                 auto sublist = top.find_pattern(pattern);
 
@@ -215,7 +221,7 @@ namespace ppstep {
         }
         
         bool can_match(ContainerT const& pattern) {
-            return std::any_of(token_stack.rbegin(), token_stack.rend(), [&pattern](auto& c){ return c.find_pattern(pattern).has_value(); });
+            return std::any_of(token_stack.rbegin(), token_stack.rend(), [&pattern](auto const& c){ return c.find_pattern(pattern).has_value(); });
         }
 
         void splice_between(ContainerT const& tokens, ContainerT const& result, container_iterator start, container_iterator end,
