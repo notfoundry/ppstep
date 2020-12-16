@@ -70,7 +70,7 @@ namespace ppstep {
 
         template <class ContextT>
         void on_expand_function(ContextT& ctx, TokenT const& call, std::vector<ContainerT> const& arguments, ContainerT call_tokens) {
-            if (token_stack.empty()) {
+            if (token_stack.empty() || !can_match(call_tokens)) {
                 push(std::move(call_tokens));
             }
 
@@ -79,8 +79,9 @@ namespace ppstep {
 
         template <class ContextT>
         void on_expand_object(ContextT& ctx, TokenT const& call) {
-            if (token_stack.empty()) {
-                push({call});
+            auto call_tokens = ContainerT{call};
+            if (token_stack.empty() || !can_match(call_tokens)) {
+                push(std::move(call_tokens));
             }
 
             handle_prompt(ctx, call, break_condition::CALL);
@@ -187,15 +188,15 @@ namespace ppstep {
             token_history.push_back(historical_tokens);
 
             if (head != tokens.end()) {
-                token_stack.emplace(std::move(tokens), std::move(head));
+                token_stack.emplace_back(std::move(tokens), std::move(head));
             } else {
-                token_stack.emplace(std::move(tokens));
+                token_stack.emplace_back(std::move(tokens));
             }
         }
 
         range_container match(ContainerT const& pattern) {
             while (!token_stack.empty()) {
-                auto& top = token_stack.top();
+                auto& top = token_stack.back();
 
                 auto sublist = top.find_pattern(pattern);
 
@@ -204,13 +205,17 @@ namespace ppstep {
 
                     return std::make_tuple(&(top.tokens), start, end);
                 } else {
-                    token_stack.pop();
+                    token_stack.pop_back();
                 }
             }
             
             std::stringstream ss;
             print_token_container(ss, pattern);
             throw std::logic_error("could not find pattern \"" + ss.str() + "\" in token stack");
+        }
+        
+        bool can_match(ContainerT const& pattern) {
+            return std::any_of(token_stack.rbegin(), token_stack.rend(), [&pattern](auto& c){ return c.find_pattern(pattern).has_value(); });
         }
 
         void splice_between(ContainerT const& tokens, ContainerT const& result, container_iterator start, container_iterator end,
@@ -226,7 +231,7 @@ namespace ppstep {
         }
 
         void reset_token_stack() {
-            while (!token_stack.empty()) token_stack.pop();
+            token_stack.clear();
         }
 
         template <class ContextT>
@@ -267,7 +272,7 @@ namespace ppstep {
         std::set<typename TokenT::string_type> expanded_breakpoints;
         stepping_mode mode;
 
-        std::stack<offset_container<ContainerT>> token_stack;
+        std::list<offset_container<ContainerT>> token_stack;
         std::vector<ContainerT> token_history;
         std::vector<TokenT> lexed_tokens;
         std::vector<TokenT> lex_buffer;
