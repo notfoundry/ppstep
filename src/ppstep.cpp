@@ -82,9 +82,10 @@ int main(int argc, char const** argv) {
     char const* input_file = args["input-file"].as<std::string>().c_str();
     auto instring = read_entire_file(std::ifstream(input_file));
 
-    auto client = ppstep::client<token_type, token_sequence_type>();
-    auto hooks = ppstep::server<token_type, token_sequence_type>(client,  args.count("debug"));
-    context_type ctx(instring.begin(), instring.end(), input_file, hooks);
+    auto server_state = ppstep::server_state<token_sequence_type>();
+    auto client = ppstep::client<token_type, token_sequence_type>(server_state);
+    auto server = ppstep::server<token_type, token_sequence_type>(server_state, client,  args.count("debug"));
+    context_type ctx(instring.begin(), instring.end(), input_file, server);
 
     static_assert(std::is_same_v<token_sequence_type, typename context_type::token_sequence_type>,
                   "wave context token container type not same as expansion tracer token container type");
@@ -120,12 +121,12 @@ int main(int argc, char const** argv) {
     auto first = ctx.begin();
     auto last = ctx.end();
     try {
-        hooks.start(ctx);
+        server.start(ctx);
         while (first != last) {
-            hooks.lexed_token(ctx, *first);
+            server.lexed_token(ctx, *first);
             ++first;
         }
-        hooks.complete(ctx);
+        server.complete(ctx);
     } catch (ppstep::session_terminate const& e) {
         ;
     } catch (boost::wave::cpp_exception const& e) {

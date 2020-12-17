@@ -39,9 +39,9 @@ namespace ppstep {
     
     template <class TokenT, class ContainerT>
     struct client {
-        client(std::string prefix) : cli(client_cli<TokenT, ContainerT>(*this, std::move(prefix))), mode(stepping_mode::FREE) {}
+        client(server_state<ContainerT>& state, std::string prefix) : state(&state), cli(client_cli<TokenT, ContainerT>(*this, std::move(prefix))), mode(stepping_mode::FREE) {}
         
-        client() : client("") {}
+        client(server_state<ContainerT>& state) : client(state, "") {}
 
         template <class ContextT>
         void on_lexed(ContextT& ctx, TokenT const& token) {
@@ -166,6 +166,10 @@ namespace ppstep {
                 }
             }
         }
+        
+        server_state<ContainerT> const& get_state() {
+            return *state;
+        }
 
         void set_mode(stepping_mode m) {
             mode = m;
@@ -273,6 +277,7 @@ namespace ppstep {
             }
         }
 
+        server_state<ContainerT>* state;
         client_cli<TokenT, ContainerT> cli;
         std::set<typename TokenT::string_type> expansion_breakpoints;
         std::set<typename TokenT::string_type> expanded_breakpoints;

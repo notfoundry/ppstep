@@ -82,8 +82,9 @@ namespace ppstep {
             
             auto old_hooks = std::move(ctx.get_hooks());
 
-            auto new_client = client<TokenT, ContainerT>(macro);
-            ctx.get_hooks() = server<TokenT, ContainerT>(new_client);
+            auto new_state = server_state<ContainerT>();
+            auto new_client = client<TokenT, ContainerT>(new_state, macro);
+            ctx.get_hooks() = server<TokenT, ContainerT>(new_state, new_client);
             auto token = ctx.expand_tokensequence(begin, end, pending, expanded, seen_newline);
 
             ctx.get_hooks() = std::move(old_hooks);
@@ -146,6 +147,34 @@ namespace ppstep {
             }
             std::cout << std::flush;
         }
+        
+        void expanding_trace() {
+            auto const& expanding = cl.get_state().expanding;
+
+            std::size_t idx = 0;
+            for (auto it = expanding.rbegin(); it != expanding.rend(); ++it, ++idx) {
+                std::cout << idx << ": ";
+                print_token_container(std::cout, *it) << std::endl;
+            }
+        }
+        
+        void rescanning_trace() {
+            auto const& rescanning = cl.get_state().rescanning;
+
+            std::size_t idx = 0;
+            for (auto it = rescanning.rbegin(); it != rescanning.rend(); ++it, ++idx) {
+                auto const& [cause, initial] = *it;
+                std::cout << idx << ": ";
+                print_token_container(std::cout, initial) << '\n';
+                
+                std::size_t padding_width = idx == 0 ? 1 : 0;
+                for (std::size_t i = idx; i != 0; i /= 10) {
+                    ++padding_width;
+                }
+                std::cout << std::string(padding_width, ' ') << "  caused by ";
+                print_token_container(std::cout, cause) << std::endl;
+            }
+        }
 
         void quit() {
             throw session_terminate();
@@ -180,6 +209,8 @@ namespace ppstep {
             qi::rule<Iterator, ascii::space_type> grammar =
                 lexeme[(lit("step") | lit("s")) >> -(+space >> uint_)][PPSTEP_ACTION(step(attr))]
               | (lit("continue") | lit("c"))[PPSTEP_ACTION(step_continue())]
+              | lexeme[(lit("backtrace") | lit("bt"))[PPSTEP_ACTION(expanding_trace())]]
+              | lexeme[(lit("forwardtrace") | lit("ft"))[PPSTEP_ACTION(rescanning_trace())]]
               | lexeme[
                   (lit("break") | lit("b")) >> *space > (
                         ((lit("call") | lit("c")) > +space > anything[PPSTEP_ACTION(add_breakpoint(attr, break_condition::CALL))])

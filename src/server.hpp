@@ -1,18 +1,25 @@
 #ifndef PPSTEP_SERVER_HPP
 #define PPSTEP_SERVER_HPP
 
-#include <stack>
 #include <vector>
 
 #include "server_fwd.hpp"
 #include "client.hpp"
 
 namespace ppstep {
+    template <class ContainerT>
+    struct server_state {
+        server_state() : expanding(), rescanning() {}
+
+        std::vector<ContainerT> expanding;
+        std::vector<std::pair<ContainerT, ContainerT>> rescanning;
+    };
+
     template <typename TokenT, typename ContainerT>
     struct server : boost::wave::context_policies::eat_whitespace<TokenT> {
         using base_type = boost::wave::context_policies::eat_whitespace<TokenT>;
 
-        server(ppstep::client<TokenT, ContainerT>& sink, bool debug = false) : sink(&sink), debug(debug), expanding(), rescanning(), conditional_nesting(0), evaluating_conditional(false)  {}
+        server(server_state<ContainerT>& state, client<TokenT, ContainerT>& sink, bool debug = false) : state(&state), sink(&sink), debug(debug), evaluating_conditional(false)  {}
 
         ~server() {}
 
@@ -60,7 +67,7 @@ namespace ppstep {
                 print_token_container(std::cout, full_call) << std::endl;
             }
 
-            expanding.push(full_call);
+            state->expanding.push_back(full_call);
 
             return false;
         }
@@ -78,7 +85,7 @@ namespace ppstep {
                 print_token(std::cout, macrocall) << std::endl;
             }
 
-            expanding.push({macrocall});
+            state->expanding.push_back({macrocall});
             return false;
         }
 
@@ -86,7 +93,7 @@ namespace ppstep {
         void expanded_macro(ContextT& ctx, ContainerT const& result) {
             if (evaluating_conditional) return;
 
-            auto const& initial = expanding.top();
+            auto const& initial = *(state->expanding.rbegin());
             
             if (!debug) {
                  sink->on_expanded(ctx, sanitize(initial), sanitize(result));
@@ -96,16 +103,16 @@ namespace ppstep {
                 print_token_container(std::cout, sanitize(result)) << std::endl;
             }
 
-            rescanning.push({initial, result});
+            state->rescanning.push_back({initial, result});
 
-            expanding.pop();
+            state->expanding.pop_back();
         }
 
         template <typename ContextT>
         void rescanned_macro(ContextT& ctx, ContainerT const& result) {
             if (evaluating_conditional) return;
 
-            auto const& [cause, initial] = rescanning.top();
+            auto const& [cause, initial] = *(state->rescanning.rbegin());
 
             if (!debug) {
                 sink->on_rescanned(ctx, sanitize(cause), sanitize(initial), sanitize(result));
@@ -115,7 +122,7 @@ namespace ppstep {
                 print_token_container(std::cout, sanitize(result)) << std::endl;
             }
 
-            rescanning.pop();
+            state->rescanning.pop_back();
         }
         
         template <typename ContextT>
@@ -126,7 +133,6 @@ namespace ppstep {
                 case boost::wave::T_PP_ELIF:
                 case boost::wave::T_PP_IFDEF:
                 case boost::wave::T_PP_IFNDEF: {
-                    ++conditional_nesting;
                     evaluating_conditional = true;
                     break;
                 }
@@ -138,7 +144,6 @@ namespace ppstep {
         
         template <typename ContextT>
         bool evaluated_conditional_expression(ContextT const& ctx, TokenT const& directive, ContainerT const& expression, bool expression_value) {
-            --conditional_nesting;
             evaluating_conditional = false;
 
             return false;
@@ -187,11 +192,9 @@ namespace ppstep {
             sink->on_complete(ctx);
         }
 
-        ppstep::client<TokenT, ContainerT>* sink;
+        server_state<ContainerT>* state;
+        client<TokenT, ContainerT>* sink;
         bool debug;
-
-        std::stack<ContainerT> expanding;
-        std::stack<std::pair<ContainerT, ContainerT>> rescanning;
 
         unsigned int conditional_nesting;
         bool evaluating_conditional;
