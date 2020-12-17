@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <string>
+#include <variant>
 #include <cstdlib>
 
 #include <boost/wave/grammars/cpp_grammar_gen.hpp>
@@ -51,12 +52,12 @@ namespace ppstep {
         }
 
         template <class Attr>
-        void add_breakpoint(Attr const& attr, break_condition cond) {
+        void add_breakpoint(Attr const& attr, preprocessing_event_type cond) {
             cl.add_breakpoint({attr.begin(), attr.end()}, cond);
         }
 
         template <class Attr>
-        void remove_breakpoint(Attr const& attr, break_condition cond) {
+        void remove_breakpoint(Attr const& attr, preprocessing_event_type cond) {
             cl.remove_breakpoint({attr.begin(), attr.end()}, cond);
         }
 
@@ -184,7 +185,8 @@ namespace ppstep {
             auto latest = cl.newest_history();
             if (latest == cl.oldest_history())
                 return;
-            print_token_container(std::cout, *latest) << std::endl;
+
+            std::visit([&latest](auto const& event){ event.print(std::cout, latest->tokens); }, latest->event);
         }
 
         template <class ContextT, typename Iterator>
@@ -213,17 +215,17 @@ namespace ppstep {
               | lexeme[(lit("forwardtrace") | lit("ft"))[PPSTEP_ACTION(rescanning_trace())]]
               | lexeme[
                   (lit("break") | lit("b")) >> *space > (
-                        ((lit("call") | lit("c")) > +space > anything[PPSTEP_ACTION(add_breakpoint(attr, break_condition::CALL))])
-                      | ((lit("expand") | lit("e")) > +space > anything[PPSTEP_ACTION(add_breakpoint(attr, break_condition::EXPANDED))])
-                      | ((lit("rescan") | lit("r")) > +space > anything[PPSTEP_ACTION(add_breakpoint(attr, break_condition::RESCANNED))])
-                      | ((lit("lex") | lit("l")) > +space > anything[PPSTEP_ACTION(add_breakpoint(attr, break_condition::LEXED))])
+                        ((lit("call") | lit("c")) > +space > anything[PPSTEP_ACTION(add_breakpoint(attr, preprocessing_event_type::CALL))])
+                      | ((lit("expand") | lit("e")) > +space > anything[PPSTEP_ACTION(add_breakpoint(attr, preprocessing_event_type::EXPANDED))])
+                      | ((lit("rescan") | lit("r")) > +space > anything[PPSTEP_ACTION(add_breakpoint(attr, preprocessing_event_type::RESCANNED))])
+                      | ((lit("lex") | lit("l")) > +space > anything[PPSTEP_ACTION(add_breakpoint(attr, preprocessing_event_type::LEXED))])
                 )]
               | lexeme[
                   (lit("delete") | lit("d")) >> *space > (
-                        ((lit("call") | lit("c")) > +space > anything[PPSTEP_ACTION(remove_breakpoint(attr, break_condition::CALL))])
-                      | ((lit("expand") | lit("e")) > +space > anything[PPSTEP_ACTION(remove_breakpoint(attr, break_condition::EXPANDED))])
-                      | ((lit("rescan") | lit("r")) > +space > anything[PPSTEP_ACTION(remove_breakpoint(attr, break_condition::RESCANNED))])
-                      | ((lit("lex") | lit("l")) > +space > anything[PPSTEP_ACTION(remove_breakpoint(attr, break_condition::LEXED))])
+                        ((lit("call") | lit("c")) > +space > anything[PPSTEP_ACTION(remove_breakpoint(attr, preprocessing_event_type::CALL))])
+                      | ((lit("expand") | lit("e")) > +space > anything[PPSTEP_ACTION(remove_breakpoint(attr, preprocessing_event_type::EXPANDED))])
+                      | ((lit("rescan") | lit("r")) > +space > anything[PPSTEP_ACTION(remove_breakpoint(attr, preprocessing_event_type::RESCANNED))])
+                      | ((lit("lex") | lit("l")) > +space > anything[PPSTEP_ACTION(remove_breakpoint(attr, preprocessing_event_type::LEXED))])
                 )]
               | lexeme[(lit("expand") | lit("e")) > +space > anything[PPSTEP_ACTION(expand_macro(ctx, attr))]]
 
@@ -249,7 +251,7 @@ namespace ppstep {
         }
 
         template <class ContextT>
-        void prompt(ContextT& ctx, bool print_state = true) {
+        void prompt(ContextT& ctx, std::string const& trigger, bool print_state = true) {
             if (steps_requested > 0) --steps_requested;
             if (steps_requested) return;
 
@@ -260,6 +262,9 @@ namespace ppstep {
             auto prompt = std::string("pp");
             if (!prefix.empty()) {
                 prompt += " [" + prefix + ']';
+            }
+            if (!trigger.empty()) {
+                prompt += " (" + trigger + ')';
             }
             prompt += "> ";
 

@@ -7,7 +7,7 @@ namespace ppstep {
     template <class TokenT, class ContainerT>
     struct client;
 
-    enum class break_condition {
+    enum class preprocessing_event_type {
         INVALID = 0,
         CALL = 1 << 0,
         EXPANDED = 1 << 1,

@@ -8,10 +8,8 @@
 
 namespace ppstep {
 
-    template <class Container, class Printer, class Delimiter>
-    std::ostream& print_with_delimiter(std::ostream& os, Container const& data, Printer printer, Delimiter const& delimiter) {
-        auto it = std::begin(data);
-        auto end = std::end(data);
+    template <class Iterator, class Printer, class Delimiter>
+    std::ostream& print_with_delimiter(std::ostream& os, Iterator& it, Iterator end, Printer printer, Delimiter const& delimiter) {
         if (it == end) return os;
 
         printer(os, *it++);
@@ -27,10 +25,16 @@ namespace ppstep {
         os << token.get_value().c_str();
         return os;
     }
+    
+    template <class Iterator>
+    std::ostream& print_token_range(std::ostream& os, Iterator& it, Iterator end) {
+        return print_with_delimiter(os, it, std::move(end), [](auto& os, auto const& token) { print_token(os, token); }, ' ');
+    }
 
     template <class Container>
     std::ostream& print_token_container(std::ostream& os, Container const& data) {
-        return print_with_delimiter(os, data, [](auto& os, auto const& token) { print_token(os, token); }, ' ');
+        auto it = std::begin(data);
+        return print_token_range(os, it, std::end(data));
     }
 
     template <class Container, class T>
