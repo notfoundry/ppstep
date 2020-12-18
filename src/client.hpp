@@ -31,9 +31,9 @@ namespace ppstep {
     }
 
     namespace events {
-        template <class ContainerT>
-        struct call {
-            call(std::size_t start, std::size_t end) : start(start), end(end) {}
+        template <class ContainerT, class DerivedT>
+        struct formatting_event {
+            formatting_event(std::size_t start, std::size_t end) : start(start), end(end) {}
 
             void print(std::ostream& os, ContainerT const& tokens) const {
                 auto sub_start = std::next(tokens.begin(), start);
@@ -47,7 +47,12 @@ namespace ppstep {
                     os << ' ';
 
                 os << ansi::white_bg << ansi::black_fg;
-                print_token_range(os, sub_start, sub_end) << ansi::reset;
+                static_cast<DerivedT const*>(this)->format(os);
+                if (sub_start != sub_end) {
+                    print_token_range(os, sub_start, sub_end) << ansi::reset;
+                } else {
+                    os << ' ' << ansi::reset;
+                }
                 if (sub_end != end)
                     os << ' ';
 
@@ -56,57 +61,32 @@ namespace ppstep {
             
             std::size_t start, end;
         };
+
+        template <class ContainerT>
+        struct call : formatting_event<ContainerT, call<ContainerT>> {
+            call(std::size_t start, std::size_t end) : formatting_event<ContainerT, call<ContainerT>>(start, end) {}
+
+            void format(std::ostream& os) const {
+                os << ansi::white_bg << ansi::black_fg;
+            }
+        };
         
         template <class ContainerT>
-        struct expanded {
-            expanded(std::size_t start, std::size_t end) : start(start), end(end) {}
+        struct expanded : formatting_event<ContainerT, expanded<ContainerT>> {
+            expanded(std::size_t start, std::size_t end) : formatting_event<ContainerT, expanded<ContainerT>>(start, end) {}
 
-            void print(std::ostream& os, ContainerT const& tokens) const {
-                auto sub_start = std::next(tokens.begin(), start);
-                auto sub_end = std::next(tokens.begin(), end);
-
-                auto it = tokens.begin();
-                auto end = tokens.end();
-                
-                print_token_range(os, it, sub_start);
-                if (it != tokens.begin())
-                    os << ' ';
-
+            void format(std::ostream& os) const {
                 os << ansi::yellow_bg << ansi::black_fg;
-                print_token_range(os, sub_start, sub_end) << ansi::reset;
-                if (sub_end != end)
-                    os << ' ';
-
-                print_token_range(os, sub_end, tokens.end()) << std::endl;
             }
-            
-            std::size_t start, end;
         };
         
         template <class ContainerT>
-        struct rescanned {
-            rescanned(std::size_t start, std::size_t end) : start(start), end(end) {}
+        struct rescanned : formatting_event<ContainerT, rescanned<ContainerT>> {
+            rescanned(std::size_t start, std::size_t end) : formatting_event<ContainerT, rescanned<ContainerT>>(start, end) {}
 
-            void print(std::ostream& os, ContainerT const& tokens) const {
-                auto sub_start = std::next(tokens.begin(), start);
-                auto sub_end = std::next(tokens.begin(), end);
-
-                auto it = tokens.begin();
-                auto end = tokens.end();
-                
-                print_token_range(os, it, sub_start);
-                if (it != tokens.begin())
-                    os << ' ';
-
+            void format(std::ostream& os) const {
                 os << ansi::blue_bg << ansi::white_fg;
-                print_token_range(os, sub_start, sub_end) << ansi::reset;
-                if (sub_end != end)
-                    os << ' ';
-
-                print_token_range(os, sub_end, tokens.end()) << std::endl;
             }
-
-            std::size_t start, end;
         };
         
         template <class ContainerT>
@@ -193,6 +173,9 @@ namespace ppstep {
                     token_history.push_back(historical_event<ContainerT>(
                         prepend_lexed(token_stack.back().tokens),
                         events::call<ContainerT>(lexed_tokens.size() + start, lexed_tokens.size() + end)));
+                } else {
+                    reset_token_stack();
+                    push(std::move(call_tokens), events::call<ContainerT>(lexed_tokens.size() + 0, lexed_tokens.size() + call_tokens.size()));
                 }
             }
             
@@ -212,6 +195,9 @@ namespace ppstep {
                     token_history.push_back(historical_event<ContainerT>(
                         prepend_lexed(token_stack.back().tokens),
                         events::call<ContainerT>(lexed_tokens.size() + start, lexed_tokens.size() + end)));
+                } else {
+                    reset_token_stack();
+                    push(std::move(call_tokens), events::call<ContainerT>(lexed_tokens.size() + 0, lexed_tokens.size() + call_tokens.size()));
                 }
             }
 
