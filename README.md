@@ -27,6 +27,8 @@ To try it out, run `ppstep your-source-file.c`. `ppstep` supports common preproc
 #### The Prompt
 You should see a prompt that looks like `pp>`. From here, you can step forward through preprocessing steps using the `step` or `s` commands, and see visually what each step does. You will notice that the prompt will have a suffix added to it to show what the current preprocessing step is, such as `called`, `expanded`, `rescanned`, or `lexed`. Newly-encountered macro calls, finished macro expansions, and finished macro rescans are each color-coded in the visual output so you can see where changes were made. When you are done, you can use the `quit` or `q` commands to exit the prompt.
 
+While stepping, if you want to see the history of pending macro expansions, you can use the `backtrace` or `bt` commands. You can also look into the future to see what the anticipated macro rescans will be by using the `forwardtrace` or `ft` commands.
+
 #### Breakpoints
 If there is a specific macro and preprocessing step that you are interested in visualizing, you can set a breakpoint on that macro using the `break` or `b` commands. To break when a specific macro is called, for example, you could enter `break call YOUR_MACRO` or `bc YOUR MACRO`. Similarly to break when that macro is finished expanding, you could enter `break expand YOUR_MACRO` or `be YOUR_MACRO`. To continue preprocessing until one of these breakpoints is hit (or preprocessing is finished), use the `continue` or `c` commands.
 
