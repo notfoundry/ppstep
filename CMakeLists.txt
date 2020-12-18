@@ -13,3 +13,5 @@ target_include_directories(ppstep PUBLIC src external)
 target_compile_options(ppstep PUBLIC -std=c++17)
 
 target_link_libraries(ppstep PUBLIC ${Boost_LIBRARIES})
+
+install(TARGETS ppstep DESTINATION bin)
