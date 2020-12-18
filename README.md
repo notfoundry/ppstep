@@ -20,7 +20,7 @@ The C and C++ preprocessors are famous for allowing users to write opaque, hard-
 2. build a srelatively up-to-date [Boost](https://www.boost.org/users/download/), or install it from your package manager of choice
 3. `cd ppstep && cmake . && make` to build the `ppstep` binary
 
-## Quickstart
+## Usage
 To try it out, run `ppstep your-source-file.c`. `ppstep` supports common preprocessor flags like --include/-I to add include directories, --define/-D to define macros, and --undefine/-U to undefine macros, if you need to do any of those things too.
 
 You should see a prompt that looks like `pp>`. From here, you can step forward through preprocessing steps using the `step` or `s` commands, and see visually what each step does. You will notice that the prompt will have a suffix added to it to show what the current preprocessing step is, such as `called`, `expanded`, `rescanned`, or `lexed`. Newly-encountered macro calls, finished macro expansions, and finished macro rescans are each color-coded in the visual output so you can see where changes were made. When you are done, you can use the `quit` or `q` commands to exit the prompt.
