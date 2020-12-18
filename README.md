@@ -4,7 +4,7 @@ The C and C++ preprocessors are famous for allowing users to write opaque, hard-
 <img src="https://raw.githubusercontent.com/notfoundry/ppstep/master/assets/demo.svg"/>
 
 <p align="center">
-  preprocessing a sequence into a tuple, visualized!
+  <i>preprocessing a sequence into a tuple, visualized!</i>
 </p>
 
 ## Features
@@ -17,7 +17,8 @@ The C and C++ preprocessors are famous for allowing users to write opaque, hard-
 
 ## Building
 1. `git clone` this repository to get the source code
-2. build a srelatively up-to-date [Boost](https://www.boost.org/users/download/), or install it from your package manager of choice
+2. make sure you have a C++17-supported compiler (GCC 5+, Clang 5+, etc.)
+2. build a relatively up-to-date [Boost](https://www.boost.org/users/download/), or install it from your package manager of choice
 3. `cd ppstep && cmake . && make` to build the `ppstep` binary
 
 ## Usage
