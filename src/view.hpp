@@ -10,6 +10,8 @@
 
 #include <boost/spirit/include/qi.hpp>
 
+#include <boost/filesystem/path.hpp>
+
 #include <linenoise/linenoise.h>
 
 #include "client_fwd.hpp"
@@ -180,12 +182,24 @@ namespace ppstep {
         void quit() {
             throw session_terminate();
         }
-
-        void current_state() {
+        
+        void explain_current_state() {
             auto latest = cl.newest_history();
             if (latest == cl.oldest_history())
                 return;
+            
+            std::visit([&latest](auto const& event){ event.explain(std::cout); }, latest->event);
+        }
 
+        template <class ContextT>
+        void current_state(ContextT& ctx) {
+            auto latest = cl.newest_history();
+            if (latest == cl.oldest_history())
+                return;
+            
+            auto pos = ctx.get_main_pos();
+            auto pos_file = boost::filesystem::path(pos.get_file().begin(), pos.get_file().end()).filename().string();
+            std::cout << '[' << pos_file << ':' << pos.get_line() << ':'  << pos.get_column() << "]: ";
             std::visit([&latest](auto const& event){ event.print(std::cout, latest->tokens); }, latest->event);
         }
 
@@ -232,10 +246,11 @@ namespace ppstep {
               | lexeme[lit("#define") > +space > anything[PPSTEP_ACTION(define_macro(ctx, attr))]]
               | lexeme[lit("#undef") > +space > anything[PPSTEP_ACTION(undefine_macro(ctx, attr))]]
               | lexeme[lit("#include") > +space > anything[PPSTEP_ACTION(include_file(ctx, attr))]]
-
+              
+              | (lit("what") | lit("?"))[PPSTEP_ACTION(explain_current_state())]
               | lit("macros")[PPSTEP_ACTION(show_macros(ctx))]
               | (lit("quit") | lit("q"))[PPSTEP_ACTION(quit())]
-              | eoi[PPSTEP_ACTION(current_state())];
+              | eoi[PPSTEP_ACTION(current_state(ctx))];
 
 #undef PPSTEP_ACTION
 
@@ -257,7 +272,7 @@ namespace ppstep {
 
             cl.set_mode(stepping_mode::FREE);
 
-            if (print_state) current_state();
+            if (print_state) current_state(ctx);
 
             auto prompt = std::string("pp");
             if (!prefix.empty()) {

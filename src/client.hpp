@@ -27,6 +27,8 @@ namespace ppstep {
         constexpr auto blue_bg = "\u001b[44;1m";
         constexpr auto white_bg = "\u001b[47m";
 
+        constexpr auto bold = "\u001b[1m";
+
         constexpr auto reset = "\u001b[0m";
     }
 
@@ -42,21 +44,22 @@ namespace ppstep {
                 auto it = tokens.begin();
                 auto end = tokens.end();
                 
+                os << ansi::bold;
                 print_token_range(os, it, sub_start);
                 if (it != tokens.begin())
                     os << ' ';
 
-                os << ansi::white_bg << ansi::black_fg;
                 static_cast<DerivedT const*>(this)->format(os);
                 if (sub_start != sub_end) {
                     print_token_range(os, sub_start, sub_end) << ansi::reset;
                 } else {
                     os << ' ' << ansi::reset;
                 }
+                os << ansi::bold;
                 if (sub_end != end)
                     os << ' ';
 
-                print_token_range(os, sub_end, tokens.end()) << std::endl;
+                print_token_range(os, sub_end, tokens.end()) << ansi::reset << std::endl;
             }
             
             std::size_t start, end;
@@ -64,35 +67,65 @@ namespace ppstep {
 
         template <class ContainerT>
         struct call : formatting_event<ContainerT, call<ContainerT>> {
-            call(std::size_t start, std::size_t end) : formatting_event<ContainerT, call<ContainerT>>(start, end) {}
+            call(ContainerT tokens, std::size_t start, std::size_t end)
+                : formatting_event<ContainerT, call<ContainerT>>(start, end), tokens(std::move(tokens)) {}
 
             void format(std::ostream& os) const {
                 os << ansi::white_bg << ansi::black_fg;
             }
+            
+            void explain(std::ostream& os) const {
+                os << "called macro " << ansi::white_bg << ansi::black_fg;
+                print_token_container(os, tokens) << ansi::reset << std::endl;
+            }
+
+            ContainerT tokens;
         };
         
         template <class ContainerT>
         struct expanded : formatting_event<ContainerT, expanded<ContainerT>> {
-            expanded(std::size_t start, std::size_t end) : formatting_event<ContainerT, expanded<ContainerT>>(start, end) {}
+            expanded(ContainerT initial, std::size_t start, std::size_t end)
+                : formatting_event<ContainerT, expanded<ContainerT>>(start, end), initial(std::move(initial)) {}
 
             void format(std::ostream& os) const {
                 os << ansi::yellow_bg << ansi::black_fg;
             }
+            
+            void explain(std::ostream& os) const {
+                os << "expanded macro " << ansi::white_bg << ansi::black_fg;
+                print_token_container(os, initial) << ansi::reset << std::endl;
+            }
+            
+            ContainerT initial;
         };
         
         template <class ContainerT>
         struct rescanned : formatting_event<ContainerT, rescanned<ContainerT>> {
-            rescanned(std::size_t start, std::size_t end) : formatting_event<ContainerT, rescanned<ContainerT>>(start, end) {}
+            rescanned(ContainerT cause, ContainerT initial, std::size_t start, std::size_t end)
+                : formatting_event<ContainerT, rescanned<ContainerT>>(start, end), cause(std::move(cause)), initial(std::move(initial)) {}
 
             void format(std::ostream& os) const {
                 os << ansi::blue_bg << ansi::white_fg;
             }
+            
+            void explain(std::ostream& os) const {
+                os << "rescanned macro " << ansi::yellow_bg << ansi::black_fg;
+                print_token_container(os, initial) << ansi::reset << "\ncaused by " << ansi::white_bg << ansi::black_fg;
+                print_token_container(os, cause) << ansi::reset << std::endl;
+            }
+            
+            ContainerT cause, initial;
         };
         
         template <class ContainerT>
         struct lexed {
             void print(std::ostream& os, ContainerT const& tokens) const {
-                print_token_container(std::cout, tokens) << std::endl;
+                os << ansi::bold;
+                print_token_container(os, tokens) << ansi::reset << std::endl;
+            }
+            
+            void explain(std::ostream& os) const {
+                os << "lexed tokens ?" << std::endl;
             }
         };
     }
@@ -165,17 +198,17 @@ namespace ppstep {
         template <class ContextT>
         void on_expand_function(ContextT& ctx, TokenT const& call, std::vector<ContainerT> const& arguments, ContainerT call_tokens) {
             if (token_stack.empty()) {
-                push(std::move(call_tokens), events::call<ContainerT>(lexed_tokens.size() + 0, lexed_tokens.size() + call_tokens.size()));
+                push(std::move(call_tokens), events::call<ContainerT>(call_tokens, lexed_tokens.size() + 0, lexed_tokens.size() + call_tokens.size()));
             } else {
                 auto lookup = find_match_indices(token_stack.back(), call_tokens);
                 if (lookup) {
                     auto [start, end] = *lookup;
                     token_history.push_back(historical_event<ContainerT>(
                         prepend_lexed(token_stack.back().tokens),
-                        events::call<ContainerT>(lexed_tokens.size() + start, lexed_tokens.size() + end)));
+                        events::call<ContainerT>(call_tokens, lexed_tokens.size() + start, lexed_tokens.size() + end)));
                 } else {
                     reset_token_stack();
-                    push(std::move(call_tokens), events::call<ContainerT>(lexed_tokens.size() + 0, lexed_tokens.size() + call_tokens.size()));
+                    push(std::move(call_tokens), events::call<ContainerT>(call_tokens, lexed_tokens.size() + 0, lexed_tokens.size() + call_tokens.size()));
                 }
             }
             
@@ -187,17 +220,17 @@ namespace ppstep {
             auto call_tokens = ContainerT{call};
             
             if (token_stack.empty()) {
-                push(std::move(call_tokens), events::call<ContainerT>(lexed_tokens.size() + 0, lexed_tokens.size() + call_tokens.size()));
+                push(std::move(call_tokens), events::call<ContainerT>(call_tokens, lexed_tokens.size() + 0, lexed_tokens.size() + call_tokens.size()));
             } else {
                 auto lookup = find_match_indices(token_stack.back(), call_tokens);
                 if (lookup) {
                     auto [start, end] = *lookup;
                     token_history.push_back(historical_event<ContainerT>(
                         prepend_lexed(token_stack.back().tokens),
-                        events::call<ContainerT>(lexed_tokens.size() + start, lexed_tokens.size() + end)));
+                        events::call<ContainerT>(call_tokens, lexed_tokens.size() + start, lexed_tokens.size() + end)));
                 } else {
                     reset_token_stack();
-                    push(std::move(call_tokens), events::call<ContainerT>(lexed_tokens.size() + 0, lexed_tokens.size() + call_tokens.size()));
+                    push(std::move(call_tokens), events::call<ContainerT>(call_tokens, lexed_tokens.size() + 0, lexed_tokens.size() + call_tokens.size()));
                 }
             }
 
@@ -215,10 +248,10 @@ namespace ppstep {
 
                 push(std::move(new_tokens),
                      std::next(new_tokens.begin(), new_start),
-                     events::expanded<ContainerT>(lexed_tokens.size() + new_start, lexed_tokens.size() + new_end));
+                     events::expanded<ContainerT>(initial, lexed_tokens.size() + new_start, lexed_tokens.size() + new_end));
 
             } catch (std::logic_error const&) {
-                push(ContainerT(result), events::expanded<ContainerT>(lexed_tokens.size() + 0, lexed_tokens.size() + result.size()));
+                push(ContainerT(result), events::expanded<ContainerT>(initial, lexed_tokens.size() + 0, lexed_tokens.size() + result.size()));
             }
 
             handle_prompt(ctx, *(initial.begin()), preprocessing_event_type::EXPANDED);
@@ -237,10 +270,10 @@ namespace ppstep {
                 
                 push(std::move(new_tokens),
                      std::next(new_tokens.begin(), new_start),
-                     events::rescanned<ContainerT>(lexed_tokens.size() + new_start, lexed_tokens.size() + new_end));
+                     events::rescanned<ContainerT>(cause, initial, lexed_tokens.size() + new_start, lexed_tokens.size() + new_end));
 
             } catch (std::logic_error const&) {
-                push(ContainerT(result), events::rescanned<ContainerT>(lexed_tokens.size() + 0, lexed_tokens.size() + result.size()));
+                push(ContainerT(result), events::rescanned<ContainerT>(cause, initial, lexed_tokens.size() + 0, lexed_tokens.size() + result.size()));
             }
 
             handle_prompt(ctx, *(initial.begin()), preprocessing_event_type::RESCANNED);
@@ -382,7 +415,7 @@ namespace ppstep {
         
         char const* get_preprocessing_event_type_name(preprocessing_event_type type) {
             switch (type) {
-                case preprocessing_event_type::CALL: return "call";
+                case preprocessing_event_type::CALL: return "called";
                 case preprocessing_event_type::EXPANDED: return "expanded";
                 case preprocessing_event_type::RESCANNED: return "rescanned";
                 case preprocessing_event_type::LEXED: return "lexed";
