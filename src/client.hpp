@@ -287,7 +287,6 @@ namespace ppstep {
 
         template <class ContextT>
         void on_complete(ContextT& ctx) {
-            std::cout << "Preprocessing complete." << std::endl;
             cli.prompt(ctx, "complete");
         }
         
