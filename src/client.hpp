@@ -21,9 +21,10 @@
 namespace ppstep {
     namespace ansi {
         constexpr auto black_fg = "\u001b[30m";
+        constexpr auto white_fg = "\u001b[37;1m";
 
         constexpr auto yellow_bg = "\u001b[43m";
-        constexpr auto green_bg = "\u001b[42;1m";
+        constexpr auto blue_bg = "\u001b[44;1m";
         constexpr auto white_bg = "\u001b[47m";
 
         constexpr auto reset = "\u001b[0m";
@@ -97,7 +98,7 @@ namespace ppstep {
                 if (it != tokens.begin())
                     os << ' ';
 
-                os << ansi::green_bg;
+                os << ansi::blue_bg << ansi::white_fg;
                 print_token_range(os, sub_start, sub_end) << ansi::reset;
                 if (sub_end != end)
                     os << ' ';
